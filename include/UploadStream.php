@@ -121,9 +121,9 @@ class UploadStream
     public static function getDir()
     {
         if (empty(self::$upload_dir)) {
-            self::$upload_dir = rtrim($GLOBALS['sugar_config']['upload_dir'], '/\\');
+            self::$upload_dir = rtrim($GLOBALS['sugar_config']['upload_dir'], '/\\') . DIRECTORY_SEPARATOR . self::getSubDir();
             if (empty(self::$upload_dir)) {
-                self::$upload_dir = "upload";
+                self::$upload_dir = 'upload' . DIRECTORY_SEPARATOR . self::getSubDir();
             }
             if (!file_exists(self::$upload_dir)) {
                 sugar_mkdir(self::$upload_dir, 0755, true);
@@ -131,6 +131,36 @@ class UploadStream
         }
 
         return self::$upload_dir;
+    }
+
+    /**
+     * Figure out the subdirectory this file is in
+     * @return string
+     */
+    public static function getSubDir()
+    {
+        // By default setup nesting
+        $subdir = gmdate('Y/m/d');
+
+        // Requesting a file download
+        if (isset($_GET['id'])) {
+            $id = $_GET['id'];
+            $type = $_GET['type'];
+
+            if ($type == 'Documents') {
+                $type = 'DocumentRevisions';
+            }
+
+            $bean = BeanFactory::getBean($type, $id);
+
+            // Use DB value, otherwise it gets converted into user format which breaks if
+            // UK is using dd/mm/yyyy because strtotime thinks that is USA
+            $enteredDate = strtotime($bean->fetched_row['date_entered']);
+
+            $subdir = gmdate('Y/m/d', $enteredDate);
+        }
+        
+        return $subdir;
     }
 
     /**
@@ -163,7 +193,18 @@ class UploadStream
             return null;
         }
 
-        return self::getDir() . "/" . $path;
+        $dir = self::getDir();
+        $subdir = self::getSubDir();
+
+        if(strpos($dir, $subdir) !== FALSE) {
+            $path = $dir .'/'. $path;
+        } else {
+            $path = $dir .'/'. $subdir .'/'. $path;
+        }
+
+        $GLOBALS['log']->fatal('path = ' . $path);
+
+        return $path;
     }
 
     /**
